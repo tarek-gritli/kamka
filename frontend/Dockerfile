@@ -1,39 +1,44 @@
 # syntax=docker/dockerfile:1.4
 
-FROM node:lts AS development
+# ── deps stage: install all dependencies ──────────────────────────────────────
+FROM node:lts-alpine AS deps
+WORKDIR /code
+COPY package.json package-lock.json ./
+RUN npm ci
 
+# ── development stage: hot-reload dev server ──────────────────────────────────
+FROM node:lts-alpine AS development
 ENV CI=true
 ENV PORT=3000
-
 WORKDIR /code
-COPY package.json /code/package.json
-COPY package-lock.json /code/package-lock.json
-COPY .npmrc .
-COPY .yarnrc.yml .
+COPY package.json package-lock.json ./
 RUN npm ci
-COPY . /code
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
 
-CMD [ "npm", "start" ]
-
-FROM development AS builder
-
+# ── builder stage: compile production build ───────────────────────────────────
+FROM deps AS builder
+COPY . .
 RUN npm run build
 
-FROM development as dev-envs
-RUN <<EOF
-apt-get update
-apt-get install -y --no-install-recommends git
-EOF
+# ── production stage: nginx serving static files, non-root ───────────────────
+FROM nginx:1.25-alpine AS production
 
-RUN <<EOF
-useradd -s /bin/bash -m vscode
-groupadd docker
-usermod -aG docker vscode
-EOF
-# install Docker tools (cli, buildx, compose)
-COPY --from=gloursdocker/docker / /
-CMD [ "npm", "start" ]
-
-FROM nginx:1.13-alpine
+# Run nginx as non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+  && chown -R appuser:appgroup /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
 COPY --from=builder /code/build /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN chown -R appuser:appgroup /usr/share/nginx/html
+
+USER appuser
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

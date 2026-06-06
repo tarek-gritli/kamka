@@ -1,49 +1,45 @@
 # syntax=docker/dockerfile:1.4
 
-# if you're doing anything beyond your local machine, please pin this to a specific version at https://hub.docker.com/_/node/
-FROM node:lts AS development
+# ── deps stage: install production dependencies only ──────────────────────────
+FROM node:lts-alpine AS deps
+WORKDIR /code
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-# set our node environment, either development or production
-# defaults to production, compose overrides this to development on build and run
-ARG NODE_ENV=production
-ENV NODE_ENV $NODE_ENV
+# ── development stage: includes devDeps + hot-reload ──────────────────────────
+FROM node:lts-alpine AS development
+ARG NODE_ENV=development
+ENV NODE_ENV=$NODE_ENV
+WORKDIR /code
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+ARG PORT=80
+ENV PORT=$PORT
+EXPOSE $PORT 9229 9230
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node healthcheck.js
+CMD ["npm", "run", "start-watch"]
 
+# ── production stage: minimal alpine image, non-root user ─────────────────────
+FROM node:lts-alpine AS production
+ENV NODE_ENV=production
 WORKDIR /code
 
-# default to port 80 for node, and 9229 and 9230 (tests) for debug
+# Run as non-root
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+COPY --from=deps /code/node_modules ./node_modules
+COPY . .
+
+RUN chown -R appuser:appgroup /code
+USER appuser
+
 ARG PORT=80
-ENV PORT $PORT
-EXPOSE $PORT 9229 9230
+ENV PORT=$PORT
+EXPOSE $PORT
 
-COPY package.json /code/package.json
-COPY package-lock.json /code/package-lock.json
-COPY .npmrc .
-COPY .yarnrc.yml .
-RUN npm ci
-
-# check every 30s to ensure this service returns HTTP 200
-HEALTHCHECK --interval=30s \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node healthcheck.js
 
-# copy in our source code last, as it changes the most
-COPY . /code
-
-# if you want to use npm start instead, then use `docker run --init in production`
-# so that signals are passed properly. Note the code in index.js is needed to catch Docker signals
-# using node here is still more graceful stopping then npm with --init afaik
-# I still can't come up with a good production way to run with npm and graceful shutdown
-CMD [ "node", "src/index.js" ]
-
-FROM development as dev-envs
-RUN <<EOF
-apt-get update
-apt-get install -y --no-install-recommends git
-EOF
-
-RUN <<EOF
-useradd -s /bin/bash -m vscode
-groupadd docker
-usermod -aG docker vscode
-EOF
-# install Docker tools (cli, buildx, compose)
-COPY --from=gloursdocker/docker / /
+CMD ["node", "src/index.js"]
