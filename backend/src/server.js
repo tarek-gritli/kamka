@@ -23,7 +23,7 @@ app.get("/", function(req, res) {
   res.send("Hello Docker World\n");
 });
 
-app.get("/api/version", function(req, res, next) {
+app.get("/version", function(req, res, next) {
   database.raw('select VERSION() version')
     .then(([rows, columns]) => rows[0])
     .then((row) => res.json({ message: `Hello from MySQL ${row.version}` }))

@@ -25,7 +25,6 @@ RUN npm run build
 # ── production stage: nginx serving static files, non-root ───────────────────
 FROM nginx:1.25-alpine AS production
 
-# Allow nginx to run as non-root: redirect pid file and tmp dirs to writable paths
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
   && mkdir -p /var/cache/nginx/client_temp \
               /var/cache/nginx/proxy_temp \
@@ -39,6 +38,9 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
               /etc/nginx/conf.d \
               /usr/share/nginx/html \
               /tmp/nginx
+
+# Override main nginx.conf to set pid path writable by non-root
+RUN sed -i 's|/var/run/nginx.pid|/tmp/nginx/nginx.pid|g' /etc/nginx/nginx.conf
 
 COPY --from=builder /code/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

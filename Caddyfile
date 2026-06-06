@@ -1,10 +1,8 @@
 {
-    # Disable auto-HTTPS when no real domain is set (localhost testing)
     auto_https off
 }
 
-{$DOMAIN:localhost} {
-
+:80 {
     # Frontend (React SPA)
     reverse_proxy frontend:8080
 
@@ -14,7 +12,6 @@
         reverse_proxy backend:80
     }
 
-    # Logging
     log {
         output stdout
         format json
