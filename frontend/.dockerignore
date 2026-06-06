@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+README.md
+build
+*.test.js
+src/**/*.test.js
+src/setupTests.js
