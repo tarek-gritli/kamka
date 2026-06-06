@@ -25,9 +25,20 @@ RUN npm run build
 # ── production stage: nginx serving static files, non-root ───────────────────
 FROM nginx:1.25-alpine AS production
 
-# Run nginx as non-root user
+# Allow nginx to run as non-root: redirect pid file and tmp dirs to writable paths
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-  && chown -R appuser:appgroup /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
+  && mkdir -p /var/cache/nginx/client_temp \
+              /var/cache/nginx/proxy_temp \
+              /var/cache/nginx/fastcgi_temp \
+              /var/cache/nginx/uwsgi_temp \
+              /var/cache/nginx/scgi_temp \
+              /tmp/nginx \
+  && chown -R appuser:appgroup \
+              /var/cache/nginx \
+              /var/log/nginx \
+              /etc/nginx/conf.d \
+              /usr/share/nginx/html \
+              /tmp/nginx
 
 COPY --from=builder /code/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
@@ -36,9 +47,9 @@ RUN chown -R appuser:appgroup /usr/share/nginx/html
 
 USER appuser
 
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost/health || exit 1
+  CMD wget -qO- http://localhost:8080/health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

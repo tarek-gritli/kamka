@@ -6,7 +6,7 @@
 {$DOMAIN:localhost} {
 
     # Frontend (React SPA)
-    reverse_proxy frontend:80
+    reverse_proxy frontend:8080
 
     # Backend API
     handle /api/* {
