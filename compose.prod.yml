@@ -1,0 +1,83 @@
+services:
+  backend:
+    build:
+      context: backend
+      target: production
+    restart: unless-stopped
+    environment:
+      - DATABASE_DB=${DATABASE_DB:-example}
+      - DATABASE_USER=${DATABASE_USER:-root}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_HOST=db
+      - DATABASE_PORT=${DATABASE_PORT:-3306}
+      - NODE_ENV=production
+    networks:
+      - public
+      - private
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:10.6.4-focal
+    command: "--default-authentication-plugin=mysql_native_password"
+    restart: unless-stopped
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - private
+    environment:
+      - MYSQL_DATABASE=${DATABASE_DB:-example}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: frontend
+      target: production
+    restart: unless-stopped
+    networks:
+      - public
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public
+    depends_on:
+      - frontend
+      - backend
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "3001:3001"
+    networks:
+      - public
+
+networks:
+  public:
+  private:
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+  uptime-kuma-data:

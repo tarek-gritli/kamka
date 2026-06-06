@@ -1,0 +1,23 @@
+# Replace with your domain in production, or use :80 for local testing
+{$DOMAIN:localhost} {
+
+    # Frontend (React SPA)
+    reverse_proxy frontend:80
+
+    # Backend API
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy backend:80
+    }
+
+    # Logging
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Uptime Kuma monitoring dashboard
+:3001 {
+    reverse_proxy uptime-kuma:3001
+}

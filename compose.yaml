@@ -1,55 +1,56 @@
 services:
   backend:
     build:
-      args:
-      - NODE_ENV=development
       context: backend
       target: development
     command: npm run start-watch
     environment:
-      - DATABASE_DB=example
-      - DATABASE_USER=root
-      - DATABASE_PASSWORD=/run/secrets/db-password
+      - DATABASE_DB=${DATABASE_DB:-example}
+      - DATABASE_USER=${DATABASE_USER:-root}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-changeme}
       - DATABASE_HOST=db
+      - DATABASE_PORT=${DATABASE_PORT:-3306}
       - NODE_ENV=development
     ports:
-      - 80:80
-      - 9229:9229
-      - 9230:9230
-    secrets:
-      - db-password
+      - "80:80"
+      - "9229:9229"
+      - "9230:9230"
     volumes:
       - ./backend/src:/code/src:ro
       - ./backend/package.json:/code/package.json
       - ./backend/package-lock.json:/code/package-lock.json
-      - back-notused:/opt/app/node_modules
+      - back-notused:/code/node_modules
     networks:
       - public
       - private
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
   db:
-    # We use a mariadb image which supports both amd64 & arm64 architecture
     image: mariadb:10.6.4-focal
-    # If you really want to use MySQL, uncomment the following line
-    #image: mysql:8.0.27
-    command: '--default-authentication-plugin=mysql_native_password'
+    command: "--default-authentication-plugin=mysql_native_password"
     restart: always
-    secrets:
-      - db-password
     volumes:
       - db-data:/var/lib/mysql
     networks:
       - private
     environment:
-      - MYSQL_DATABASE=example
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/db-password
+      - MYSQL_DATABASE=${DATABASE_DB:-example}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeme}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   frontend:
     build:
       context: frontend
       target: development
     ports:
-      - 3000:3000
+      - "3000:3000"
     volumes:
       - ./frontend/src:/code/src
       - /code/node_modules
@@ -57,12 +58,11 @@ services:
       - public
     depends_on:
       - backend
+
 networks:
   public:
   private:
+
 volumes:
   back-notused:
   db-data:
-secrets:
-  db-password:
-    file: db/password.txt
