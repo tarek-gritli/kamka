@@ -1,4 +1,8 @@
-# Replace with your domain in production, or use :80 for local testing
+{
+    # Disable auto-HTTPS when no real domain is set (localhost testing)
+    auto_https off
+}
+
 {$DOMAIN:localhost} {
 
     # Frontend (React SPA)
